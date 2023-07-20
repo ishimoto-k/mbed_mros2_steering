@@ -23,24 +23,17 @@
 #include "custom_msgs/geometry_msgs/msg/twist.hpp"
 #include "EthernetInterface.h"
 #include <steering.hpp>
+#include <memory>
 
 #define IP_ADDRESS ("192.168.11.2") /* IP address */
 #define SUBNET_MASK ("255.255.255.0") /* Subnet mask */
 #define DEFAULT_GATEWAY ("192.168.11.1") /* Default gateway */
 
-Semaphore oneSlot(1);
-static UnbufferedSerial console(USBTX, USBRX);
+// static UnbufferedSerial console(USBTX, USBRX);
 
 mros2::Subscriber sub;
-mros2::Subscriber sub2;
 mros2::Publisher pub;
-
-
-// Steering steering(
-//     Tire(DigitalOut(D1), DigitalOut(D2), PwmOut(D3), PwmOut(D3), 0),
-//     Tire(DigitalOut(D1), DigitalOut(D2), PwmOut(D3), PwmOut(D3), 0),
-//     Tire(DigitalOut(D1), DigitalOut(D2), PwmOut(D3), PwmOut(D3), 0)
-// );
+shared_ptr<Steering> steering;
 
 void userCallback(std_msgs::msg::String *msg)
 {
@@ -49,13 +42,19 @@ void userCallback(std_msgs::msg::String *msg)
 
 void userTwistCallback(geometry_msgs::msg::Twist *msg)
 {
-  printf("subscribed msg: linear  x:'%f' y:'%f' z:'%f'\r\n", msg->linear.x, msg->linear.y, msg->linear.z);
-  printf("subscribed msg: angular x:'%f' y:'%f' z:'%f'\r\n", msg->angular.x, msg->angular.y, msg->angular.z);
-
+  printf("subscribed msg: linear  x:%lf y:%lf z:%lf\r\n", msg->linear.x, msg->linear.y, msg->linear.z);
+  printf("subscribed msg: angular x:%lf y:%lf z:%lf\r\n", msg->angular.x, msg->angular.y, msg->angular.z);
+  steering->run(msg->linear.x, msg->linear.y, msg->angular.z);
   // モータ指令の実装をすればいいはず。
 }
+
 int main() {
-    console.baud(115200);
+    Tire t1(PE_2, PE_4, PE_5, PE_6, 0);
+    Tire t2(PC_11, PC_10, PC_9, PC_8, 0);
+    Tire t3(D8, D9, D10, D11, 0);
+    steering = make_shared<Steering>(t1,t2,t3);
+
+    // console.baud(115200);
     EthernetInterface network;
     network.set_dhcp(false);
     network.set_network(IP_ADDRESS, SUBNET_MASK, DEFAULT_GATEWAY);
@@ -88,26 +87,28 @@ int main() {
     printf("app name: echoreply_string\r\n");
     mros2::init(0, NULL);
     MROS2_DEBUG("mROS 2 initialization is completed\r\n");
+    
+    // tires.push_back(t1);
+    // tires.push_back(t2);
+    // tires.push_back(t3);
+    mros2::Node logNode = mros2::Node::create_node("mros2_node");
 
-    mros2::Node logNode = mros2::Node::create_node("mros2_log_node");
-
-    pub = logNode.create_publisher<std_msgs::msg::Int16>("to_linux", 10);
-    sub = logNode.create_subscription<std_msgs::msg::String>("to_stm", 10, userCallback);
-    // sub2 = twistNode.create_subscription<geometry_msgs::msg::Twist>("cmd_vel", 10, userTwistCallback);
+    pub = logNode.create_publisher<std_msgs::msg::String>("to_linux", 10);
+    // sub = logNode.create_subscription<std_msgs::msg::String>("to_stm", 10, userCallback);
+    sub = logNode.create_subscription<geometry_msgs::msg::Twist>("cmd_vel", 10, userTwistCallback);
 
     MROS2_INFO("ready to pub/sub message\r\n");
 
+    // eventThread.start(callback(&queue, &EventQueue::dispatch_forever));
 
     int count = 0;
     DigitalIn button(BUTTON1);
     while(true){
-        // std_msgs::msg::String msg;
-        // msg.data = "hello world from stm!" + std::to_string(count);
         if(button){
-            std_msgs::msg::Int16 msg;
-            msg.data = count;
+            std_msgs::msg::String msg;
+            msg.data = "hello world from stm! send: " + to_string(count) + " \r\n";
             pub.publish(msg);
-            MROS2_INFO("hello world from stm! send: %d \r\n",msg.data);
+            MROS2_INFO("%s \r\n",msg.data.data());
             count ++;
             osDelay(1000);
         }

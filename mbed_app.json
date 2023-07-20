@@ -1,0 +1,12 @@
+{
+    "target_overrides": {
+        "*": {
+            "target.printf_lib": "std",
+            "platform.stdio-baud-rate": 115200,
+            "mbed-trace.enable": false,
+            "mbed-trace.max-level": "TRACE_LEVEL_DEBUG",
+            "rtos.main-thread-stack-size": 8192,
+            "lwip.pbuf-pool-size": 20
+        }
+    }
+}
